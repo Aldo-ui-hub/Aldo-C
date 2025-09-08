@@ -1,0 +1,193 @@
+# Import libraries and packages
+import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
+import numpy as np
+
+# create the fig and ax objects to handle figure and axes of the fixed frame
+fig,ax = plt.subplots()
+ax = plt.axes(projection = "3d")
+
+def setaxis(x1, x2, y1, y2, z1, z2):
+    ax.set_xlim3d(x1,x2)
+    ax.set_ylim3d(y1,y2)
+    ax.set_zlim3d(z1,z2)
+    ax.view_init(elev=30, azim=40)
+
+def fix_system(axis_length, linewidth=5):
+    x = [-axis_length, axis_length]
+    y = [-axis_length, axis_length] 
+    z = [-axis_length, axis_length]
+    zp = [0, 0]
+    ax.plot3D(x, zp, zp, color='red', linewidth=linewidth)
+    ax.plot3D(zp, y, zp, color='green', linewidth=linewidth)
+    ax.plot3D(zp, zp, z, color='blue', linewidth=linewidth)
+
+def sind(t): return np.sin(t*np.pi/180)
+def cosd(t): return np.cos(t*np.pi/180)
+
+# --- Transformaciones homogéneas en grados ---
+def TRx(t):
+    return np.array([
+        [1,      0,       0, 0],
+        [0,  cosd(t), -sind(t), 0],
+        [0,  sind(t),  cosd(t), 0],
+        [0,      0,       0, 1]
+    ])
+
+def TRy(t):
+    return np.array([
+        [ cosd(t), 0, sind(t), 0],
+        [      0,  1,      0,  0],
+        [-sind(t), 0, cosd(t), 0],
+        [      0,  0,      0,  1]
+    ])
+
+def TRz(t):
+    return np.array([
+        [cosd(t),-sind(t),0, 0],
+        [sind(t), cosd(t),0, 0],
+        [0,            0, 1, 0],
+        [0,            0, 0, 1]
+    ])
+
+def TTx(a):
+    return np.array([
+        [1,0,0,a],
+        [0,1,0,0],
+        [0,0,1,0],
+        [0,0,0,1]
+    ])
+
+def TTy(a):
+    return np.array([
+        [1,0,0,0],
+        [0,1,0,a],
+        [0,0,1,0],
+        [0,0,0,1]
+    ])
+
+def TTz(a):
+    return np.array([
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, a],
+        [0, 0, 0, 1]
+    ])
+
+def drawVector(p_fin, p_init=[0,0,0], color='black',linewidth=1):
+    deltaX = [p_init[0], p_fin[0]]
+    deltaY = [p_init[1], p_fin[1]]
+    deltaZ = [p_init[2], p_fin[2]]
+    ax.plot3D(deltaX, deltaY, deltaZ,color=color, linewidth=linewidth)
+
+def drawMobileFrame(origin, x, y, z):
+    x = [(origin[0] + x[0]), (origin[1] + x[1]), (origin[2] + x[2])]
+    y = [(origin[0] + y[0]), (origin[1] + y[1]), (origin[2] + y[2])]
+    z = [(origin[0] + z[0]), (origin[1] + z[1]), (origin[2] + z[2])]
+    drawVector(x,origin, color="red")
+    drawVector(y,origin, color="green")
+    drawVector(z,origin, color="blue")
+
+def getUnitaryVectorsFromMatrix(TM):
+    x      = [TM[0][0], TM[1][0], TM[2][0]]
+    y      = [TM[0][1], TM[1][1], TM[2][1]]
+    z      = [TM[0][2], TM[1][2], TM[2][2]]
+    origin = [TM[0][3], TM[1][3], TM[2][3]]
+    return[x,y,z,origin]
+
+# ======== PARÁMETROS ========
+# Longitudes
+l1 = 15
+l2 = 10
+l3 = 8
+
+# Ángulos objetivo (grados) para “cerrar” el dedo
+theta1_target = 30
+theta2_target = 50
+theta3_target = 20
+beta_target   = 25   # rotación final de la base en Y
+
+# Vista
+setaxis(-25,25,-25,25,-25,25)
+
+# ======== DIBUJO DE LA CADENA PARA ANGULOS Y BETA DADOS ========
+def draw_chain(theta1, theta2, theta3, beta):
+    ax.cla()
+    setaxis(-25,25,-25,25,-25,25)
+    fix_system(10,linewidth=1)
+
+    # Base (rotación en Y)
+    T0 = TRy(beta)
+    [x0,y0,z0,o0] = getUnitaryVectorsFromMatrix(T0)
+    drawMobileFrame(o0, x0, y0, z0)
+
+    # Eslabón 1: Rz(theta1) -> Tx(l1)
+    T1   = TRz(theta1)
+    T2   = TTx(l1)
+    T01  = T0.dot(T1)
+    [x1,y1,z1,o1] = getUnitaryVectorsFromMatrix(T01)
+    drawMobileFrame(o1, x1, y1, z1)
+
+    T012 = T01.dot(T2)
+    [x2,y2,z2,o2] = getUnitaryVectorsFromMatrix(T012)
+    drawMobileFrame(o2, x2, y2, z2)
+    drawVector(o2, o1, color="black", linewidth=4)  # segmento l1
+
+    # Eslabón 2: Rz(theta2) -> Tx(l2)
+    T3    = TRz(theta2)
+    T4    = TTx(l2)
+    T0123 = T012.dot(T3)
+    [x3,y3,z3,o3] = getUnitaryVectorsFromMatrix(T0123)
+    drawMobileFrame(o3, x3, y3, z3)
+
+    T01234 = T0123.dot(T4)
+    [x4,y4,z4,o4] = getUnitaryVectorsFromMatrix(T01234)
+    drawMobileFrame(o4, x4, y4, z4)
+    drawVector(o4, o3, color="black", linewidth=4)  # segmento l2
+
+    # Eslabón 3: Rz(theta3) -> Tx(l3)
+    T5     = TRz(theta3)
+    T6     = TTx(l3)
+    T012345 = T01234.dot(T5)
+    [x5,y5,z5,o5] = getUnitaryVectorsFromMatrix(T012345)
+    drawMobileFrame(o5, x5, y5, z5)
+
+    T0123456 = T012345.dot(T6)
+    [x6,y6,z6,o6] = getUnitaryVectorsFromMatrix(T0123456)
+    drawMobileFrame(o6, x6, y6, z6)
+    drawVector(o6, o5, color="black", linewidth=4)  # segmento l3
+
+    # guías (opcionales)
+    drawVector(o2, o0, color="gray", linewidth=1)
+    drawVector(o4, o2, color="gray", linewidth=1)
+    drawVector(o6, o4, color="gray", linewidth=1)
+
+    plt.draw()
+    plt.pause(0.001)
+
+# ======== ANIMACIÓN (DED0 -> CIERRE -> ROTACIÓN BASE Y) ========
+# 0) Frame inicial: dedo recto (θ1=θ2=θ3=0), beta=0
+draw_chain(0, 0, 0, 0)
+
+# 1) Cierra junta 1: θ1: 0 -> theta1_target
+for s in np.linspace(0, 1, 60):
+    theta1 = theta1_target * s
+    draw_chain(theta1, 0, 0, 0)
+
+# 2) Cierra junta 2: θ2: 0 -> theta2_target (θ1 fijo)
+for s in np.linspace(0, 1, 60):
+    theta2 = theta2_target * s
+    draw_chain(theta1_target, theta2, 0, 0)
+
+# 3) Cierra junta 3: θ3: 0 -> theta3_target (θ1, θ2 fijos)
+for s in np.linspace(0, 1, 60):
+    theta3 = theta3_target * s
+    draw_chain(theta1_target, theta2_target, theta3, 0)
+
+# 4) Rotación de base en Y: β: 0 -> beta_target (dedo ya cerrado)
+for s in np.linspace(0, 1, 60):
+    beta = beta_target * s
+    draw_chain(theta1_target, theta2_target, theta3_target, beta)
+
+# show
+plt.show()
