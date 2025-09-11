@@ -1,0 +1,75 @@
+# --- Librerías ---
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d  # mantiene el estilo original
+
+# --- Figura/Ax 3D ---
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
+
+# ---------- Utilidades de vista y ejes ----------
+def setup_view(xmin, xmax, ymin, ymax, zmin, zmax):
+    ax.set_xlim3d(xmin, xmax)
+    ax.set_ylim3d(ymin, ymax)
+    ax.set_zlim3d(zmin, zmax)
+    ax.view_init(elev=30, azim=40)
+
+def draw_axes(length=10, lw=1):
+    # Ejes X, Y, Z con líneas sencillas (sin colores llamativos)
+    x = [-length, length]; y = [-length, length]; z = [-length, length]; o = [0, 0]
+    ax.plot3D(x, o, o, linewidth=lw)
+    ax.plot3D(o, y, o, linewidth=lw)
+    ax.plot3D(o, o, z, linewidth=lw)
+
+# ---------- Primitivas ----------
+def segment3d(p_end, p_start=(0,0,0), lw=1):
+    xs = [p_start[0], p_end[0]]
+    ys = [p_start[1], p_end[1]]
+    zs = [p_start[2], p_end[2]]
+    ax.plot3D(xs, ys, zs, linewidth=lw)
+
+def dot3d(p, mk='o'):
+    ax.scatter(p[0], p[1], p[2], marker=mk)
+
+def box3d(p1, p2, p3, p4, p5, p6, p7, p8):
+    # Dibuja vértices
+    for p in (p1,p2,p3,p4,p5,p6,p7,p8):
+        dot3d(p)
+    # Dibuja aristas a partir de una lista de pares (índices 1..8)
+    verts = [p1,p2,p3,p4,p5,p6,p7,p8]
+    edges = [(1,2),(2,3),(3,4),(4,1),
+             (5,6),(6,7),(7,8),(8,5),
+             (4,8),(1,5),(3,7),(2,6)]
+    for a,b in edges:
+        segment3d(verts[b-1], verts[a-1])
+
+# ---------- Caja base ----------
+p1 = np.array([0,0,0]);  p2 = np.array([7,0,0]);  p3 = np.array([7,0,3]);  p4 = np.array([0,0,3])
+p5 = np.array([0,2,0]);  p6 = np.array([7,2,0]);  p7 = np.array([7,2,3]);  p8 = np.array([0,2,3])
+P_INIT = [p1,p2,p3,p4,p5,p6,p7,p8]
+
+# Vista inicial
+setup_view(-15,15,-15,15,-15,15)
+draw_axes(10, 1)
+box3d(*P_INIT)
+
+# ---------- Animación: traslación en Z ----------
+def animar_caja_en_z(pasos, step_z=0.1, pausa=0.04):
+    k = 0
+    while k < pasos:
+        ax.cla()
+        setup_view(-15, 15, -15, 15, -15, 15)
+        draw_axes(10, 1)
+
+        t = np.array([0, 0, k*step_z])
+        pts = [p + t for p in P_INIT]
+        box3d(*pts)
+
+        k += 1
+        plt.draw()
+        plt.pause(pausa)
+
+# Ejecutar
+animar_caja_en_z(90)
+plt.draw()
+plt.show()
