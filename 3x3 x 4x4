@@ -1,0 +1,118 @@
+# ====== 3D Box + rotación Z (versión diferenciada) ======
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d  # mismo backend 3D, distinta construcción
+
+# --- Lienzo 3D ---
+fig = plt.figure()
+ax = fig.add_subplot(1, 1, 1, projection="3d")
+
+# ----------------- Vista y ejes -----------------
+def vista(xmin, xmax, ymin, ymax, zmin, zmax, elev=30, az=40):
+    """Configura los límites y el ángulo de cámara."""
+    ax.set_xlim3d(xmin, xmax)
+    ax.set_ylim3d(ymin, ymax)
+    ax.set_zlim3d(zmin, zmax)
+    ax.view_init(elev=elev, azim=az)
+
+def ejes(L=10, lw=1):
+    """Dibuja ejes cartesianos centrados en (0,0,0)."""
+    o = [0, 0]
+    ax.plot3D([-L, L], o, o, linewidth=lw)  # X
+    ax.plot3D(o, [-L, L], o, linewidth=lw)  # Y
+    ax.plot3D(o, o, [-L, L], linewidth=lw)  # Z
+
+# ----------------- Trig en grados -----------------
+def sind(t):
+    """seno con t en grados."""
+    return np.sin(np.deg2rad(t))
+
+def cosd(t):
+    """coseno con t en grados."""
+    return np.cos(np.deg2rad(t))
+
+# ----------------- Rotaciones -----------------
+def Rz_deg(theta):
+    """Matriz de rotación en Z para theta grados."""
+    c, s = cosd(theta), sind(theta)
+    return np.array([[c, -s, 0],
+                     [s,  c, 0],
+                     [0,  0, 1]], dtype=float)
+
+# ----------------- Primitivas de dibujo -----------------
+def linea3d(p0, p1, lw=1):
+    ax.plot3D([p0[0], p1[0]], [p0[1], p1[1]], [p0[2], p1[2]], linewidth=lw)
+
+def punto3d(p, mk="o"):
+    ax.scatter(p[0], p[1], p[2], marker=mk)
+
+def caja_desde_vertices(V, dibujar_puntos=True, lw=1):
+    """
+    V: ndarray (8,3) con el orden:
+       0:p1 1:p2 2:p3 3:p4 4:p5 5:p6 6:p7 7:p8
+    """
+    if dibujar_puntos:
+        for p in V:
+            punto3d(p)
+
+    edges = [
+        (0,1), (1,2), (2,3), (3,0),  # base
+        (4,5), (5,6), (6,7), (7,4),  # tapa
+        (3,7), (0,4), (2,6), (1,5)   # uniones verticales/diagonales
+    ]
+    for a, b in edges:
+        linea3d(V[a], V[b], lw=lw)
+
+# ----------------- Transformaciones simples -----------------
+def trasladar_vertices(V, dx=0.0, dy=0.0, dz=0.0):
+    """Traslada todos los vértices por (dx,dy,dz)."""
+    T = np.array([dx, dy, dz], dtype=float)
+    return V + T
+
+# ----------------- Datos base de la caja -----------------
+# Mismos puntos que usabas, pero agrupados en un array:
+V0 = np.array([
+    [0, 0, 0],   # p1
+    [7, 0, 0],   # p2
+    [7, 0, 3],   # p3
+    [0, 0, 3],   # p4
+    [0, 2, 0],   # p5
+    [7, 2, 0],   # p6
+    [7, 2, 3],   # p7
+    [0, 2, 3],   # p8
+], dtype=float)
+
+# ----- Vista inicial y caja original -----
+vista(-15, 15, -15, 15, -15, 15)
+ejes(10, 1)
+caja_desde_vertices(V0, dibujar_puntos=True, lw=1)
+
+# Ejemplo de “traslación” tipo tu función rotate_box (pero nombrada distinto)
+V_t = trasladar_vertices(V0, dx=0, dy=0, dz=0)
+caja_desde_vertices(V_t, dibujar_puntos=True, lw=1)
+
+# ----------------- Animación: rotación en Z -----------------
+def animar_rotacion_z(pasos, pausa=0.05):
+    """
+    Rota la caja en torno a Z 'pasos' grados (1 grado por iteración).
+    Mantiene la lógica con plt.pause y limpieza con ax.cla().
+    """
+    n = 0
+    while n < pasos:
+        ax.cla()
+        vista(-15, 15, -15, 15, -15, 15)
+        ejes(10, 1)
+
+        R = Rz_deg(n)               # Rotación Z de n grados
+        V = (R @ V0.T).T            # aplica rotación a todos los vértices
+        caja_desde_vertices(V, dibujar_puntos=True, lw=1)
+
+        n += 1
+        plt.draw()
+        plt.pause(pausa)
+
+# Ejecutar animación (equivalente a tu animate_box_z(90) con RotZ)
+animar_rotacion_z(90)
+
+plt.draw()
+plt.show()
