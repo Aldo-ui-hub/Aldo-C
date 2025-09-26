@@ -1,0 +1,137 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Limita valores dentro de un rango definido
+def limitar_valor(v, minimo=-1.0, maximo=1.0):
+    return max(minimo, min(maximo, v))
+
+# Normaliza ángulos al intervalo [-π, π]
+def angulo_normalizado(ang):
+    return (ang + np.pi) % (2 * np.pi) - np.pi
+
+# Configurar el espacio de visualización
+def configurar_vista(xmin, xmax, ymin, ymax, zmin, zmax):
+    grafico.set_xlim3d(xmin, xmax)
+    grafico.set_ylim3d(ymin, ymax)
+    grafico.set_zlim3d(zmin, zmax)
+    grafico.view_init(elev=30, azim=40)
+
+# Dibuja los ejes cartesianos
+def dibujar_ejes3d(longitud, ancho=4):
+    rango = [-longitud, longitud]
+    ceros = [0, 0]
+    grafico.plot3D(rango, ceros, ceros, color="red", lw=ancho)     # eje X
+    grafico.plot3D(ceros, rango, ceros, color="green", lw=ancho)   # eje Y
+    grafico.plot3D(ceros, ceros, rango, color="blue", lw=ancho)    # eje Z
+
+# Cinemática directa: posición de codo y efector final
+def brazo_directo(theta_base, theta1, theta2, l1, l2):
+    x_c = l1 * np.cos(theta1)
+    z_c = l1 * np.sin(theta1)
+
+    x_f = x_c + l2 * np.cos(theta1 + theta2)
+    z_f = z_c + l2 * np.sin(theta1 + theta2)
+
+    # Rotación respecto a la base
+    Rz = np.array([
+        [np.cos(theta_base), -np.sin(theta_base), 0],
+        [np.sin(theta_base),  np.cos(theta_base), 0],
+        [0, 0, 1]
+    ])
+
+    base = np.array([0, 0, 0])
+    codo = Rz @ np.array([x_c, 0, z_c])
+    ef   = Rz @ np.array([x_f, 0, z_f])
+    return base, codo, ef
+
+# Cinemática inversa: calcula ángulos dados px,py,pz
+def brazo_inverso(px, py, pz, l1, l2, modo="arriba"):
+    t_base = np.arctan2(py, px)
+    r = np.hypot(px, py)
+
+    X, Z = r, pz
+    distancia = np.hypot(X, Z)
+
+    # Comprobación de alcanzabilidad
+    if distancia > l1 + l2 or distancia < abs(l1 - l2):
+        return None
+
+    # Ley de cosenos
+    cos_t2 = limitar_valor((X**2 + Z**2 - l1**2 - l2**2) / (2 * l1 * l2))
+    t2 = np.arccos(cos_t2)
+
+    if modo == "arriba":
+        t2 = -t2
+
+    k1 = l1 + l2 * np.cos(t2)
+    k2 = l2 * np.sin(t2)
+    t1 = np.arctan2(Z, X) - np.arctan2(k2, k1)
+
+    return t_base, t1, t2
+
+# Traza el brazo en 3D
+def trazar_brazo(tb, t1, t2, l1, l2):
+    base, codo, ef = brazo_directo(tb, t1, t2, l1, l2)
+    xs, ys, zs = [base[0], codo[0], ef[0]], [base[1], codo[1], ef[1]], [base[2], codo[2], ef[2]]
+    grafico.plot(xs, ys, zs, "k-", lw=3)
+    grafico.scatter(xs, ys, zs, c="k", s=40)
+
+# Interpolación suave entre ángulos
+def interpolar_ang(a_ini, a_fin, t):
+    diff = (a_fin - a_ini + np.pi) % (2 * np.pi) - np.pi
+    return a_ini + diff * t
+
+def main():
+    print("Simulación 3D de brazo robótico con opción de codo")
+
+    # Configuración
+    modo = input("Selecciona codo 'arriba' o 'abajo': ").strip().lower()
+    if modo not in ("arriba", "abajo"):
+        print("ERROR: Valor no válido.")
+        return
+
+    # Parámetros
+    l1 = float(input("Longitud l1: "))
+    l2 = float(input("Longitud l2: "))
+    Xf = float(input("Posición Xf: "))
+    Yf = float(input("Posición Yf: "))
+    Zf = float(input("Posición Zf: "))
+
+    # Solución inversa
+    solucion = brazo_inverso(Xf, Yf, Zf, l1, l2, modo)
+    if solucion is None:
+        print("El objetivo no puede alcanzarse con estas longitudes.")
+        return
+
+    tb_f, t1_f, t2_f = solucion
+    print(f"Ángulos: θ_base = {np.degrees(tb_f):.2f}°, θ1 = {np.degrees(t1_f):.2f}°, θ2 = {np.degrees(t2_f):.2f}°")
+
+    # Animación
+    pasos = 100
+    tb0, t10, t20 = 0.0, 0.0, 0.0
+    fig = plt.figure(figsize=(8, 8))
+    global grafico
+    grafico = fig.add_subplot(111, projection="3d")
+    rango = l1 + l2 + 2
+
+    for i in range(pasos + 1):
+        t = i / pasos
+        tb = interpolar_ang(tb0, tb_f, t)
+        t1 = interpolar_ang(t10, t1_f, t)
+        t2 = interpolar_ang(t20, t2_f, t)
+
+        grafico.cla()
+        configurar_vista(-rango, rango, -rango, rango, -rango, rango)
+        dibujar_ejes3d(rango, 1)
+        grafico.set_title(f"Brazo 3D - codo {modo}")
+        grafico.scatter([0], [0], [0], c="k", s=80)   # base
+        grafico.scatter([Xf], [Yf], [Zf], c="r", s=60) # objetivo
+        trazar_brazo(tb, t1, t2, l1, l2)
+
+        plt.pause(0.03)
+
+    plt.show()
+
+if __name__ == "__main__":
+    main()
+
