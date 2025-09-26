@@ -1,0 +1,130 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Limitar un valor dentro de un rango
+def limitar(valor, minimo=-1.0, maximo=1.0):
+    return max(minimo, min(maximo, valor))
+
+# Normaliza ángulos al rango [-π, π]
+def normalizar_angulo(ang):
+    return (ang + np.pi) % (2 * np.pi) - np.pi
+
+# Cinemática directa: devuelve posiciones (base, codo, efector final)
+def pos_brazo(ang1, ang2, l1, l2):
+    x_codo = l1 * np.cos(ang1)
+    y_codo = l1 * np.sin(ang1)
+    x_ef = x_codo + l2 * np.cos(ang1 + ang2)
+    y_ef = y_codo + l2 * np.sin(ang1 + ang2)
+    return (0, 0), (x_codo, y_codo), (x_ef, y_ef)
+
+# Cinemática inversa: dado un punto, calcula los ángulos
+def inv_brazo(xf, yf, l1, l2, modo):
+    r2 = xf**2 + yf**2
+    r = np.sqrt(r2)
+
+    # Verificación de alcanzabilidad
+    if r > (l1 + l2) or r < abs(l1 - l2):
+        return None
+
+    # Ley de cosenos
+    cos_a2 = limitar((r2 - l1**2 - l2**2) / (2 * l1 * l2))
+    a2 = np.arccos(cos_a2)
+    cos_a1 = limitar((r2 + l1**2 - l2**2) / (2 * l1 * r))
+    a1 = np.arccos(cos_a1)
+    phi = np.arctan2(yf, xf)
+
+    # Dos posibles soluciones (codo arriba o abajo)
+    candidatos = [
+        (phi - np.arctan2(l2 * np.sin(a2), l1 + l2 * np.cos(a2)), a2),
+        (phi - np.arctan2(l2 * np.sin(-a2), l1 + l2 * np.cos(-a2)), -a2),
+    ]
+
+    # Evaluar altura del codo en cada solución
+    soluciones = []
+    for ang1, ang2 in candidatos:
+        _, (x_c, y_c), _ = pos_brazo(ang1, ang2, l1, l2)
+        soluciones.append((ang1, ang2, y_c))
+
+    if modo == "arriba":
+        ang1_final, ang2_final, _ = max(soluciones, key=lambda s: s[2])
+    else:
+        ang1_final, ang2_final, _ = min(soluciones, key=lambda s: s[2])
+
+    return ang1_final, ang2_final
+
+# Dibujo de ejes cartesianos
+def ejes(ax, rango=5):
+    ax.plot([-rango, rango], [0, 0], color="red", lw=2, label="X")
+    ax.plot([0, 0], [-rango, rango], color="green", lw=2, label="Y")
+    ax.legend(loc="upper right")
+
+# Dibuja brazo articulado
+def trazar_brazo(ax, ang1, ang2, l1, l2, pos_final=None):
+    base, codo, ef = pos_brazo(ang1, ang2, l1, l2)
+    if pos_final is not None:
+        ef = pos_final
+    xs = [base[0], codo[0], ef[0]]
+    ys = [base[1], codo[1], ef[1]]
+    ax.plot(xs, ys, "k-", lw=3)
+    ax.scatter(xs, ys, c="k", s=25)
+
+# Interpolación entre dos ángulos
+def interpolar(a_ini, a_fin, t):
+    diff = (a_fin - a_ini + np.pi) % (2 * np.pi) - np.pi
+    return a_ini + diff * t
+
+def main():
+    print("Simulación de brazo planar (configuración de codo)")
+
+    # Configuración del codo
+    modo = input("¿Codo 'arriba' o 'abajo'? ").strip().lower()
+    if modo not in ("arriba", "abajo"):
+        print("Entrada inválida. Debe ser 'arriba' o 'abajo'.")
+        return
+
+    # Parámetros del brazo y punto objetivo
+    l1 = float(input("Longitud del primer eslabón (l1): "))
+    l2 = float(input("Longitud del segundo eslabón (l2): "))
+    xf = float(input("Coordenada X objetivo: "))
+    yf = float(input("Coordenada Y objetivo: "))
+
+    # Solución de ángulos
+    solucion = inv_brazo(xf, yf, l1, l2, modo)
+    if solucion is None:
+        print("El objetivo no se puede alcanzar con esas longitudes.")
+        return
+
+    ang1_final, ang2_final = solucion
+    print(f"Ángulos obtenidos: θ1 = {np.degrees(ang1_final):.2f}°, θ2 = {np.degrees(ang2_final):.2f}°")
+
+    # Animación del movimiento
+    pasos = 100
+    fig, ax = plt.subplots(figsize=(6, 6))
+    limite = l1 + l2 + 1
+    ang1_ini, ang2_ini = 0.0, 0.0
+
+    for k in range(pasos + 1):
+        t = k / pasos
+        a1 = interpolar(ang1_ini, ang1_final, t)
+        a2 = interpolar(ang2_ini, ang2_final, t)
+
+        ax.cla()
+        ax.set_xlim(-limite, limite)
+        ax.set_ylim(-limite, limite)
+        ax.set_aspect("equal")
+        ax.set_title(f"Brazo con codo {modo}")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ejes(ax, l1 + l2)
+        ax.scatter([xf], [yf], c="red", s=60)
+
+        destino = (xf, yf) if k == pasos else None
+        trazar_brazo(ax, a1, a2, l1, l2, pos_final=destino)
+
+        plt.pause(0.03)
+
+    plt.show()
+
+if __name__ == "__main__":
+    main()
+
